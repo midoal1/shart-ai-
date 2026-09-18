@@ -30,6 +30,14 @@ market_service = MarketDataService()
 news_service = NewsService()
 decision_engine = DecisionEngine()
 
+@app.get("/")
+async def root():
+    return {
+        "status": "healthy",
+        "service": "Smart Trader AI Engine",
+        "version": "1.0.0"
+    }
+
 @app.get("/api/health")
 async def health_check():
     return {
