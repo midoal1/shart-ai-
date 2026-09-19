@@ -35,7 +35,7 @@ async def root():
     return {
         "status": "healthy",
         "service": "Smart Trader AI Engine",
-        "version": "1.0.0"
+        "version": "1.5.0"
     }
 
 @app.get("/api/health")
@@ -43,7 +43,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "Smart Trader AI Engine",
-        "version": "1.0.0"
+        "version": "1.5.0"
     }
 
 @app.get("/api/market-summary")
