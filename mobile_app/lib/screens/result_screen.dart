@@ -163,7 +163,9 @@ class ResultScreen extends StatelessWidget {
               Text(
                 analysis.currentPrice >= 10
                     ? '\$${analysis.currentPrice.toStringAsFixed(2)}'
-                    : '\$${analysis.currentPrice.toStringAsFixed(4)}',
+                    : (analysis.currentPrice < 2
+                        ? analysis.currentPrice.toStringAsFixed(5)
+                        : '\$${analysis.currentPrice.toStringAsFixed(4)}'),
                 style: const TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.w900,

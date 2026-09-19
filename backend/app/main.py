@@ -74,7 +74,8 @@ async def analyze_chart(
         indicators, s_levels, r_levels = await market_service.get_live_market_data(
             symbol=extraction.symbol,
             timeframe=extraction.timeframe,
-            market_type=extraction.market_type
+            market_type=extraction.market_type,
+            extracted_price=extraction.current_price
         )
 
         # Step 3: News & High-Impact Event Radar

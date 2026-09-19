@@ -518,7 +518,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         subtitle: Text(
-          'دخول: ${item.setup.entryPrice ?? item.currentPrice}  |  الثقة: ${item.setup.confidenceScore}%',
+          'دخول: ${item.setup.entryPrice}  |  الثقة: ${item.setup.confidenceScore}%',
           style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
         ),
         trailing: Container(

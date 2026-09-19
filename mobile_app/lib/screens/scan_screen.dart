@@ -17,11 +17,11 @@ class _ScanScreenState extends State<ScanScreen> {
   File? _selectedImage;
   final ImagePicker _picker = ImagePicker();
   final _symbolController = TextEditingController();
-  String _selectedTimeframe = '1h';
+  String _selectedTimeframe = 'auto';
   bool _isAnalyzing = false;
   String _loadingMessage = 'جاري الاتصال بالخادم...';
 
-  final List<String> _timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h'];
+  final List<String> _timeframes = ['auto', '1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '1d'];
 
   @override
   void dispose() {
@@ -65,19 +65,13 @@ class _ScanScreenState extends State<ScanScreen> {
 
     setState(() {
       _isAnalyzing = true;
-      _loadingMessage = 'جاري استخراج النماذج الفنية بواسطة Gemini Vision...';
+      _loadingMessage = 'جاري التعرف على الزوج والفريم والسعر بالذكاء الاصطناعي...';
     });
 
-    // Simulate progressive loading steps for smooth UX
-    Future.delayed(const Duration(milliseconds: 1400), () {
+    // Fast progressive updates
+    Future.delayed(const Duration(milliseconds: 1000), () {
       if (mounted && _isAnalyzing) {
-        setState(() => _loadingMessage = 'جاري جلب أرقام السوق الحقيقية وحساب RSI و ATR رياضياً...');
-      }
-    });
-
-    Future.delayed(const Duration(milliseconds: 2800), () {
-      if (mounted && _isAnalyzing) {
-        setState(() => _loadingMessage = 'جاري فحص الأخبار الاقتصادية وتحديد مستويات وقف الخسارة...');
+        setState(() => _loadingMessage = 'جاري قراءة الشموع وحساب مستويات وقف الخسارة والهدف...');
       }
     });
 
@@ -85,7 +79,7 @@ class _ScanScreenState extends State<ScanScreen> {
       final analysis = await ApiService.analyzeChart(
         imageFile: _selectedImage!,
         symbol: _symbolController.text.trim().isNotEmpty ? _symbolController.text.trim() : null,
-        timeframe: _selectedTimeframe,
+        timeframe: _selectedTimeframe == 'auto' ? null : _selectedTimeframe,
       );
 
       // Save to local history
@@ -329,10 +323,10 @@ class _ScanScreenState extends State<ScanScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.tune, color: AppTheme.primaryBlue, size: 18),
+              const Icon(Icons.auto_awesome, color: AppTheme.buyGreen, size: 18),
               const SizedBox(width: 8),
               const Text(
-                'تأكيد المعطيات (اختياري لضمان دقة 100%)',
+                'خيارات إضافية (اختياري - يكتشفها الذكاء الاصطناعي تلقائياً)',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textPrimary),
               ),
             ],
@@ -346,7 +340,7 @@ class _ScanScreenState extends State<ScanScreen> {
             controller: _symbolController,
             style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.bold),
             decoration: InputDecoration(
-              hintText: 'مثلاً: BTCUSDT, EURUSD, XAUUSD',
+              hintText: 'تلقائي من لقطة الشاشة (أو اكتب رمزاً مخصصاً)',
               hintStyle: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
               filled: true,
               fillColor: AppTheme.surfaceElevated,
@@ -367,8 +361,16 @@ class _ScanScreenState extends State<ScanScreen> {
             runSpacing: 8,
             children: _timeframes.map((tf) {
               final isSel = _selectedTimeframe == tf;
+              final label = tf == 'auto' ? 'تلقائي (اكتشاف ذكي)' : tf;
               return ChoiceChip(
-                label: Text(tf, style: TextStyle(color: isSel ? Colors.black : AppTheme.textPrimary, fontWeight: FontWeight.bold)),
+                label: Text(
+                  label, 
+                  style: TextStyle(
+                    color: isSel ? Colors.black : AppTheme.textPrimary, 
+                    fontWeight: FontWeight.bold,
+                    fontSize: tf == 'auto' ? 12 : 13,
+                  )
+                ),
                 selected: isSel,
                 selectedColor: AppTheme.buyGreen,
                 backgroundColor: AppTheme.surfaceElevated,

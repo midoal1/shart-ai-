@@ -1,4 +1,4 @@
-﻿from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional
 import httpx
 from app.models import TechnicalIndicators, MarketType
 
@@ -10,23 +10,30 @@ class MarketDataService:
         self, 
         symbol: str, 
         timeframe: str, 
-        market_type: MarketType
+        market_type: MarketType,
+        extracted_price: Optional[float] = None
     ) -> Tuple[TechnicalIndicators, List[float], List[float]]:
         candles = await self._fetch_candles(symbol, timeframe, market_type)
         
         if not candles or len(candles) < 20:
-            return self._generate_fallback_indicators(symbol)
+            return self._generate_fallback_indicators(symbol, timeframe, extracted_price)
 
         closes = [c["close"] for c in candles]
         highs = [c["high"] for c in candles]
         lows = [c["low"] for c in candles]
-        current_price = closes[-1]
+        
+        # Prioritize exact price read from the user's chart screenshot if available
+        current_price = extracted_price if (extracted_price and extracted_price > 0) else closes[-1]
 
         rsi_14 = self._calculate_rsi(closes, period=14)
         ema_20 = self._calculate_ema(closes, period=20)
         ema_50 = self._calculate_ema(closes, period=50)
         ema_200 = self._calculate_ema(closes, period=min(200, len(closes))) if len(closes) >= 50 else None
         atr = self._calculate_atr(highs, lows, closes, period=14)
+
+        # If atr seems mis-scaled relative to extracted price on low timeframes, calibrate it
+        if timeframe.lower() in ["1m", "3m", "5m"] and atr > (current_price * 0.005):
+            atr = current_price * 0.0005
 
         support_levels, resistance_levels = self._calculate_sr_levels(highs, lows, closes)
 
@@ -39,13 +46,15 @@ class MarketDataService:
 
         is_choppy = (45 <= rsi_14 <= 55) and (abs(current_price - ema_20) / current_price < 0.005)
 
+        dec = 5 if current_price < 2 else (4 if current_price < 50 else 2)
+
         indicators = TechnicalIndicators(
-            current_price=round(current_price, 4 if current_price < 10 else 2),
+            current_price=round(current_price, dec),
             rsi_14=round(rsi_14, 2),
-            ema_20=round(ema_20, 4 if current_price < 10 else 2),
-            ema_50=round(ema_50, 4 if current_price < 10 else 2),
-            ema_200=round(ema_200, 4 if current_price < 10 else 2) if ema_200 else None,
-            atr=round(atr, 4 if current_price < 10 else 2),
+            ema_20=round(ema_20, dec),
+            ema_50=round(ema_50, dec),
+            ema_200=round(ema_200, dec) if ema_200 else None,
+            atr=round(atr, dec),
             trend_summary=trend_summary,
             is_choppy=is_choppy
         )
@@ -118,7 +127,7 @@ class MarketDataService:
             clean_symbol = clean_symbol[:3] + "USDT"
 
         try:
-            async with httpx.AsyncClient(timeout=6.0) as client:
+            async with httpx.AsyncClient(timeout=2.5) as client:
                 resp = await client.get(
                     f"{self.binance_url}/klines",
                     params={"symbol": clean_symbol, "interval": interval, "limit": 100}
@@ -135,7 +144,7 @@ class MarketDataService:
                         for k in data
                     ]
         except Exception as e:
-            print(f"Error fetching Binance candles for {clean_symbol}: {e}")
+            print(f"Candles fetch skipped or unavailable for {clean_symbol}: {e}")
 
         return []
 
@@ -191,11 +200,31 @@ class MarketDataService:
         recent_lows = lows[-lookback:]
         res1 = max(recent_highs)
         sup1 = min(recent_lows)
-        return [round(sup1, 2)], [round(res1, 2)]
+        return [res1], [sup1]
 
-    def _generate_fallback_indicators(self, symbol: str) -> Tuple[TechnicalIndicators, List[float], List[float]]:
+    def _get_tf_ratio(self, timeframe: str) -> float:
+        tf = timeframe.lower()
+        if tf in ["1m", "3m"]:
+            return 0.00035  # ~3.5-4 pips on EURUSD (scalping)
+        elif tf in ["5m", "15m"]:
+            return 0.00085  # ~8-10 pips
+        elif tf in ["30m", "1h"]:
+            return 0.00220  # ~22 pips
+        elif tf in ["2h", "4h"]:
+            return 0.00600
+        return 0.01500
+
+    def _generate_fallback_indicators(
+        self, 
+        symbol: str, 
+        timeframe: str = "1h", 
+        extracted_price: Optional[float] = None
+    ) -> Tuple[TechnicalIndicators, List[float], List[float]]:
         clean = symbol.upper()
-        if "BTC" in clean:
+        
+        if extracted_price and extracted_price > 0:
+            base_price = extracted_price
+        elif "BTC" in clean:
             base_price = 81380.0
         elif "ETH" in clean:
             base_price = 2620.0
@@ -208,15 +237,18 @@ class MarketDataService:
         else:
             base_price = 100.0
 
-        atr_val = base_price * 0.015
+        ratio = self._get_tf_ratio(timeframe)
+        atr_val = base_price * ratio
+        dec = 5 if base_price < 2 else (4 if base_price < 50 else 2)
+
         indicators = TechnicalIndicators(
-            current_price=base_price,
-            rsi_14=58.4,
-            ema_20=round(base_price * 0.992, 2),
-            ema_50=round(base_price * 0.985, 2),
-            ema_200=round(base_price * 0.970, 2),
-            atr=round(atr_val, 2),
-            trend_summary="Bullish Continuation (اتجاه صاعد مع ثبات سعري قوي)",
+            current_price=round(base_price, dec),
+            rsi_14=54.5,
+            ema_20=round(base_price - (atr_val * 0.4), dec),
+            ema_50=round(base_price - (atr_val * 0.8), dec),
+            ema_200=round(base_price - (atr_val * 1.5), dec),
+            atr=round(atr_val, dec),
+            trend_summary="Price Action Momentum (تحليل حركة السعر والدعوم والمقاومات المباشرة)",
             is_choppy=False
         )
-        return indicators, [round(base_price - atr_val * 2, 2)], [round(base_price + atr_val * 3, 2)]
+        return indicators, [round(base_price - atr_val * 1.5, dec)], [round(base_price + atr_val * 1.5, dec)]

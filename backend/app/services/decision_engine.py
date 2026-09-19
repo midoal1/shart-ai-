@@ -45,28 +45,38 @@ class DecisionEngine:
             tech_score -= 20
             reasons.append(f"مؤشر RSI مستقر عند {rsi} في المنطقة السلبية مما يدعم استكمال الاتجاه الهابط.")
 
-        # 3. Chart Patterns
+        # 3. Chart Patterns & Visual Signal Bias
         pattern_str = ", ".join(extraction.patterns) if extraction.patterns else "نموذج حركة سعر كلاسيكي"
         if extraction.visual_trend.lower() == "uptrend":
             tech_score += 20
-            reasons.append(f"التحليل البصري يظهر اتجاهاً عاماً صاعداً (Uptrend) مع نماذج إيجابية: ({pattern_str}).")
+            reasons.append(f"التحليل البصري يظهر اتجاهاً عاماً صاعداً (Uptrend) مع نماذج: ({pattern_str}).")
         elif extraction.visual_trend.lower() == "downtrend":
             tech_score -= 20
-            reasons.append(f"التحليل البصري يظهر اتجاهاً عاماً هابطاً (Downtrend) مع نماذج سلبية: ({pattern_str}).")
+            reasons.append(f"التحليل البصري يظهر اتجاهاً عاماً هابطاً (Downtrend) مع نماذج: ({pattern_str}).")
         else:
             reasons.append("الشارت يظهر حركة جانبية (Sideways Consolidation) داخل نطاق سعري محدد.")
+
+        if extraction.signal_bias == "BUY":
+            tech_score += 25
+            reasons.append("إشارات الشموع الفورية تؤكد ضغطاً شرائياً صاعداً وارتداداً من القاع.")
+        elif extraction.signal_bias == "SELL":
+            tech_score -= 25
+            reasons.append("إشارات الشموع الفورية تؤكد ضغطاً بيعياً مستمراً وكسراً للدعوم.")
 
         # 4. News Sentiment Score
         sentiment_score = 0.0
         if news:
             avg_news = sum(item.sentiment_score for item in news) / len(news)
-            sentiment_score = avg_news * 30  # Max +/- 30
+            sentiment_score = avg_news * 25  # Max +/- 25
             if avg_news > 0.3:
                 reasons.append("الأخبار والبيانات المتدفقة إيجابية وداعمة لثقة المستثمرين في هذا الأصل.")
             elif avg_news < -0.3:
                 reasons.append("البيانات الإخبارية الحالية تشير إلى حذر وسلبية قد تضغط على الأسعار.")
 
         total_score = tech_score + sentiment_score
+
+        # Decimal precision: 5 decimals for EURUSD / Forex, 4 for low-price crypto, 2 for BTC/Gold
+        dec = 5 if current_price < 2 else (4 if current_price < 50 else 2)
 
         # 5. Anti-Misleading Protection Rules
         is_wait = False
@@ -79,7 +89,7 @@ class DecisionEngine:
             reasons.insert(0, f"⚠️ {wait_reason}")
 
         # Check market chop
-        elif indicators.is_choppy or (-15 <= total_score <= 15):
+        elif indicators.is_choppy or (-12 <= total_score <= 12):
             is_wait = True
             wait_reason = "السوق يمر بمرحلة تذبذب عرضي ضيق (Chop / Consolidation). الدخول الآن عالي الخطورة، والأفضل انتظار كسر النطاق."
             reasons.insert(0, f"⏳ {wait_reason}")
@@ -89,39 +99,39 @@ class DecisionEngine:
             action = SignalAction.NEUTRAL_WAIT
             confidence = 50
             risk_assessment = "HIGH"
-            entry = current_price
-            sl = current_price - atr
-            tp1 = current_price + atr
-            tp2 = current_price + (atr * 2)
+            entry = round(current_price, dec)
+            sl = round(current_price - atr, dec)
+            tp1 = round(current_price + atr, dec)
+            tp2 = round(current_price + (atr * 2), dec)
             rrr = 1.0
-        elif total_score >= 50:
-            action = SignalAction.STRONG_BUY if total_score >= 70 else SignalAction.BUY
+        elif total_score >= 40:
+            action = SignalAction.STRONG_BUY if total_score >= 65 else SignalAction.BUY
             confidence = min(96, int(60 + (total_score / 2.5)))
             risk_assessment = "LOW" if confidence >= 85 else "MEDIUM"
-            entry = round(current_price, 4 if current_price < 10 else 2)
+            entry = round(current_price, dec)
             
-            # SL placed safely below support or 1.5x ATR
-            sup = support_levels[0] if support_levels and support_levels[0] < current_price else (current_price - 1.5 * atr)
-            sl = round(min(sup, current_price - atr), 4 if current_price < 10 else 2)
-            risk_distance = max(entry - sl, atr * 0.5)
+            # SL placed safely below support or bounded by 1.5x ATR
+            sup = support_levels[0] if support_levels and 0 < (current_price - support_levels[0]) <= (atr * 2.5) else (current_price - 1.2 * atr)
+            sl = round(min(sup, current_price - atr), dec)
+            risk_distance = max(entry - sl, atr * 0.8)
 
-            tp1 = round(entry + (risk_distance * 1.5), 4 if current_price < 10 else 2)
-            tp2 = round(entry + (risk_distance * 2.5), 4 if current_price < 10 else 2)
-            rrr = round((tp1 - entry) / max(0.0001, entry - sl), 2)
+            tp1 = round(entry + (risk_distance * 1.5), dec)
+            tp2 = round(entry + (risk_distance * 2.5), dec)
+            rrr = round((tp1 - entry) / max(0.00001, entry - sl), 2)
 
         else:
-            action = SignalAction.STRONG_SELL if total_score <= -70 else SignalAction.SELL
+            action = SignalAction.STRONG_SELL if total_score <= -65 else SignalAction.SELL
             confidence = min(96, int(60 + (abs(total_score) / 2.5)))
             risk_assessment = "LOW" if confidence >= 85 else "MEDIUM"
-            entry = round(current_price, 4 if current_price < 10 else 2)
+            entry = round(current_price, dec)
 
-            res = resistance_levels[0] if resistance_levels and resistance_levels[0] > current_price else (current_price + 1.5 * atr)
-            sl = round(max(res, current_price + atr), 4 if current_price < 10 else 2)
-            risk_distance = max(sl - entry, atr * 0.5)
+            res = resistance_levels[0] if resistance_levels and 0 < (resistance_levels[0] - current_price) <= (atr * 2.5) else (current_price + 1.2 * atr)
+            sl = round(max(res, current_price + atr), dec)
+            risk_distance = max(sl - entry, atr * 0.8)
 
-            tp1 = round(entry - (risk_distance * 1.5), 4 if current_price < 10 else 2)
-            tp2 = round(entry - (risk_distance * 2.5), 4 if current_price < 10 else 2)
-            rrr = round((entry - tp1) / max(0.0001, sl - entry), 2)
+            tp1 = round(entry - (risk_distance * 1.5), dec)
+            tp2 = round(entry - (risk_distance * 2.5), dec)
+            rrr = round((entry - tp1) / max(0.00001, sl - entry), 2)
 
         setup = TradeSetup(
             action=action,

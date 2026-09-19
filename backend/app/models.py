@@ -20,10 +20,12 @@ class ChartExtraction(BaseModel):
     symbol: str = Field(description="Detected asset symbol e.g., BTCUSDT, EURUSD, XAUUSD, NVDA")
     market_type: MarketType = Field(default=MarketType.CRYPTO)
     timeframe: str = Field(default="1h", description="Detected timeframe e.g., 15m, 1h, 4h, 1D")
+    current_price: Optional[float] = Field(default=None, description="Exact market price read from the chart price axis")
     visual_trend: str = Field(description="Uptrend, Downtrend, Sideways")
     patterns: List[str] = Field(default_factory=list, description="Detected patterns like Double Bottom, Head and Shoulders, Bull Flag")
     support_levels: List[float] = Field(default_factory=list)
     resistance_levels: List[float] = Field(default_factory=list)
+    signal_bias: Optional[str] = Field(default=None, description="Immediate visual signal bias: BUY, SELL, or WAIT")
     confidence: float = Field(default=0.8, description="Vision model confidence 0.0 to 1.0")
 
 class TechnicalIndicators(BaseModel):

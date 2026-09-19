@@ -131,7 +131,9 @@ class TradeCard extends StatelessWidget {
     required bool highlight,
     String? subtitle,
   }) {
-    final priceStr = price >= 10 ? price.toStringAsFixed(2) : price.toStringAsFixed(4);
+    final priceStr = price >= 10
+        ? price.toStringAsFixed(2)
+        : (price < 2 ? price.toStringAsFixed(5) : price.toStringAsFixed(4));
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
