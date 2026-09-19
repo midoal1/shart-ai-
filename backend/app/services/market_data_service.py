@@ -1,19 +1,20 @@
+﻿from typing import List, Dict, Any, Tuple, Optional
 import httpx
-from typing import List, Dict, Any, Tuple
 from app.models import TechnicalIndicators, MarketType
 
 class MarketDataService:
     def __init__(self):
         self.binance_url = "https://api.binance.com/api/v3"
 
-    async def get_live_market_data(self, symbol: str, timeframe: str, market_type: MarketType) -> Tuple[TechnicalIndicators, List[float], List[float]]:
-        """
-        Fetch real candlestick data and compute mathematical indicators deterministically.
-        Returns: (TechnicalIndicators, support_levels, resistance_levels)
-        """
+    async def get_live_market_data(
+        self, 
+        symbol: str, 
+        timeframe: str, 
+        market_type: MarketType
+    ) -> Tuple[TechnicalIndicators, List[float], List[float]]:
         candles = await self._fetch_candles(symbol, timeframe, market_type)
+        
         if not candles or len(candles) < 20:
-            # Fallback realistic indicators if public API is blocked or offline
             return self._generate_fallback_indicators(symbol)
 
         closes = [c["close"] for c in candles]
@@ -21,17 +22,14 @@ class MarketDataService:
         lows = [c["low"] for c in candles]
         current_price = closes[-1]
 
-        # Calculate indicators
         rsi_14 = self._calculate_rsi(closes, period=14)
         ema_20 = self._calculate_ema(closes, period=20)
         ema_50 = self._calculate_ema(closes, period=50)
         ema_200 = self._calculate_ema(closes, period=min(200, len(closes))) if len(closes) >= 50 else None
         atr = self._calculate_atr(highs, lows, closes, period=14)
 
-        # Detect support & resistance from local extrema
         support_levels, resistance_levels = self._calculate_sr_levels(highs, lows, closes)
 
-        # Trend summary
         if ema_20 > ema_50 and current_price > ema_20:
             trend_summary = "Bullish Momentum (السعر فوق المتوسطات السريعة 20 و 50)"
         elif ema_20 < ema_50 and current_price < ema_20:
@@ -39,7 +37,6 @@ class MarketDataService:
         else:
             trend_summary = "Consolidation / Sideways (حركة عرضية وتذبذب حول المتوسطات)"
 
-        # Choppiness detection: RSI near 50 and price close to EMA20 (<0.3% difference)
         is_choppy = (45 <= rsi_14 <= 55) and (abs(current_price - ema_20) / current_price < 0.005)
 
         indicators = TechnicalIndicators(
@@ -56,22 +53,26 @@ class MarketDataService:
         return indicators, support_levels, resistance_levels
 
     async def get_market_overview(self) -> List[Dict[str, Any]]:
-        """Fetch live ticker prices for popular assets from live Binance API"""
+        """Fetch ultra-fast live ticker prices for popular assets from Binance API"""
         results = []
+        target_display = [
+            ("BTC/USDT", "BTCUSDT"),
+            ("ETH/USDT", "ETHUSDT"),
+            ("SOL/USDT", "SOLUSDT"),
+            ("EUR/USD", "EURUSDT"),
+            ("GOLD (XAU)", "PAXGUSDT"),
+        ]
+        symbols_param = '["BTCUSDT","ETHUSDT","SOLUSDT","EURUSDT","PAXGUSDT"]'
+        
         try:
-            async with httpx.AsyncClient(timeout=4.0) as client:
-                resp = await client.get(f"{self.binance_url}/ticker/24hr")
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    f"{self.binance_url}/ticker/24hr",
+                    params={"symbols": symbols_param}
+                )
                 if resp.status_code == 200:
                     data = resp.json()
                     data_map = {item["symbol"]: item for item in data}
-                    
-                    target_display = [
-                        ("BTC/USDT", "BTCUSDT"),
-                        ("ETH/USDT", "ETHUSDT"),
-                        ("SOL/USDT", "SOLUSDT"),
-                        ("EUR/USD", "EURUSDT"),
-                        ("GOLD (XAU)", "PAXGUSDT"),
-                    ]
                     
                     for display_name, sym in target_display:
                         if sym in data_map:
@@ -87,55 +88,55 @@ class MarketDataService:
                                 "raw_price": price
                             })
         except Exception as e:
-            print(f"Error fetching market overview: {e}")
+            print(f"Error fetching fast market overview: {e}")
 
         if not results:
             results = [
-                {"name": "BTC/USDT", "price": "67,820", "change": "+2.1%", "up": True},
-                {"name": "ETH/USDT", "price": "3,490", "change": "+1.5%", "up": True},
-                {"name": "EUR/USD", "price": "1.0845", "change": "-0.10%", "up": False},
-                {"name": "GOLD (XAU)", "price": "2,360", "change": "+0.45%", "up": True},
+                {"name": "BTC/USDT", "price": "81,380.00", "change": "+2.85%", "up": True},
+                {"name": "ETH/USDT", "price": "2,620.00", "change": "+1.40%", "up": True},
+                {"name": "SOL/USDT", "price": "113.60", "change": "+3.20%", "up": True},
+                {"name": "EUR/USD", "price": "1.1508", "change": "-0.05%", "up": False},
+                {"name": "GOLD (XAU)", "price": "4,367.05", "change": "+0.28%", "up": True},
             ]
         return results
 
     async def _fetch_candles(self, symbol: str, timeframe: str, market_type: MarketType) -> List[Dict[str, float]]:
-        """Fetch candles from public APIs (Binance for crypto, or public forex)"""
-        # Map timeframe to Binance intervals
         tf_map = {
             "1m": "1m", "3m": "3m", "5m": "5m", "15m": "15m", 
             "30m": "30m", "1h": "1h", "2h": "2h", "4h": "4h", 
             "1d": "1d", "1D": "1d"
         }
         interval = tf_map.get(timeframe.lower(), "1h")
-
         clean_symbol = symbol.upper().replace("/", "").replace("-", "").strip()
 
-        if market_type == MarketType.CRYPTO or clean_symbol.endswith("USDT") or clean_symbol in ["BTC", "ETH", "SOL", "XRP", "BNB"]:
-            if not clean_symbol.endswith("USDT") and not clean_symbol.endswith("BUSD"):
-                clean_symbol += "USDT"
-            try:
-                async with httpx.AsyncClient(timeout=6.0) as client:
-                    resp = await client.get(
-                        f"{self.binance_url}/klines",
-                        params={"symbol": clean_symbol, "interval": interval, "limit": 100}
-                    )
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        # Format: [open_time, open, high, low, close, volume, ...]
-                        return [
-                            {
-                                "high": float(k[2]),
-                                "low": float(k[3]),
-                                "close": float(k[4]),
-                                "volume": float(k[5])
-                            }
-                            for k in data
-                        ]
-            except Exception as e:
-                print(f"Error fetching Binance candles: {e}")
+        # Handle Gold / Commodities:
+        if "XAU" in clean_symbol or "GOLD" in clean_symbol or "PAXG" in clean_symbol:
+            clean_symbol = "PAXGUSDT"
+        elif clean_symbol in ["BTC", "ETH", "SOL", "XRP", "BNB", "DOGE"]:
+            clean_symbol += "USDT"
+        elif clean_symbol in ["EURUSD", "GBPUSD"]:
+            clean_symbol = clean_symbol[:3] + "USDT"
 
-        # For Forex / Commodities (EURUSD, XAUUSD)
-        # We can try public forex feeds or return synthetic fallback
+        try:
+            async with httpx.AsyncClient(timeout=6.0) as client:
+                resp = await client.get(
+                    f"{self.binance_url}/klines",
+                    params={"symbol": clean_symbol, "interval": interval, "limit": 100}
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return [
+                        {
+                            "high": float(k[2]),
+                            "low": float(k[3]),
+                            "close": float(k[4]),
+                            "volume": float(k[5])
+                        }
+                        for k in data
+                    ]
+        except Exception as e:
+            print(f"Error fetching Binance candles for {clean_symbol}: {e}")
+
         return []
 
     def _calculate_rsi(self, closes: List[float], period: int = 14) -> float:
@@ -185,31 +186,37 @@ class MarketDataService:
         return sum(true_ranges[-period:]) / min(len(true_ranges), period)
 
     def _calculate_sr_levels(self, highs: List[float], lows: List[float], closes: List[float]) -> Tuple[List[float], List[float]]:
-        """Calculate dynamic support and resistance from recent 30 candles"""
         lookback = min(30, len(closes))
         recent_highs = highs[-lookback:]
         recent_lows = lows[-lookback:]
-        
-        # Max high as resistance, min low as support
         res1 = max(recent_highs)
         sup1 = min(recent_lows)
-        
-        # Mid levels
-        mid_point = (res1 + sup1) / 2
         return [round(sup1, 2)], [round(res1, 2)]
 
     def _generate_fallback_indicators(self, symbol: str) -> Tuple[TechnicalIndicators, List[float], List[float]]:
-        """Used if the pair is completely offline or during testing"""
-        base_price = 68450.0 if "BTC" in symbol.upper() else (1.0850 if "EUR" in symbol.upper() else 2350.0)
+        clean = symbol.upper()
+        if "BTC" in clean:
+            base_price = 81380.0
+        elif "ETH" in clean:
+            base_price = 2620.0
+        elif "SOL" in clean:
+            base_price = 113.6
+        elif "EUR" in clean:
+            base_price = 1.1508
+        elif "XAU" in clean or "GOLD" in clean or "PAXG" in clean:
+            base_price = 4367.05
+        else:
+            base_price = 100.0
+
         atr_val = base_price * 0.015
         indicators = TechnicalIndicators(
             current_price=base_price,
             rsi_14=58.4,
-            ema_20=base_price * 0.992,
-            ema_50=base_price * 0.985,
-            ema_200=base_price * 0.970,
-            atr=atr_val,
-            trend_summary="Bullish Continuation (اتجاه صاعد منتظم مع استقرار فوق المتوسطات)",
+            ema_20=round(base_price * 0.992, 2),
+            ema_50=round(base_price * 0.985, 2),
+            ema_200=round(base_price * 0.970, 2),
+            atr=round(atr_val, 2),
+            trend_summary="Bullish Continuation (اتجاه صاعد مع ثبات سعري قوي)",
             is_choppy=False
         )
         return indicators, [round(base_price - atr_val * 2, 2)], [round(base_price + atr_val * 3, 2)]

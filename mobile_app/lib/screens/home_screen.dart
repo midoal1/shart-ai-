@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/analysis_model.dart';
 import '../services/api_service.dart';
 import '../services/history_service.dart';
+import '../services/language_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/disclaimer_dialog.dart';
 import 'scan_screen.dart';
@@ -45,6 +47,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = Provider.of<LanguageProvider>(context);
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -59,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: const Icon(Icons.candlestick_chart, color: AppTheme.buyGreen, size: 20),
             ),
             const SizedBox(width: 8),
-            const Text('Smart Trader AI'),
+            Text(lang.tr('app_title')),
           ],
         ),
         actions: [
@@ -73,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: AppTheme.textSecondary),
-            tooltip: 'الإعدادات',
+            tooltip: lang.tr('settings_title'),
             onPressed: () async {
               await Navigator.push(
                 context,
@@ -85,37 +89,38 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: RefreshIndicator(
+        color: AppTheme.buyGreen,
+        backgroundColor: AppTheme.surface,
         onRefresh: _loadInitialData,
-        color: AppTheme.primaryBlue,
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Server Status Banner
-              _buildServerStatusBadge(),
+              _buildServerStatusBadge(lang),
               const SizedBox(height: 16),
 
               // Hero Action Card
-              _buildHeroScanCard(context),
+              _buildHeroScanCard(context, lang),
               const SizedBox(height: 20),
 
               // Anti-Misleading Security Feature Card
-              _buildAntiMisleadingShield(),
+              _buildAntiMisleadingShield(lang),
               const SizedBox(height: 24),
 
               // Live Market Watch Section
-              _buildMarketTickerSection(),
+              _buildMarketTickerSection(lang),
               const SizedBox(height: 24),
 
               // Recent Analysis History Section
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'آخر التحليلات',
-                    style: TextStyle(
+                  Text(
+                    lang.tr('recent_analysis'),
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: AppTheme.textPrimary,
@@ -127,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         context,
                         MaterialPageRoute(builder: (_) => const HistoryScreen()),
                       ),
-                      child: const Text('عرض الكل', style: TextStyle(color: AppTheme.primaryBlue)),
+                      child: Text(lang.tr('view_all'), style: const TextStyle(color: AppTheme.primaryBlue)),
                     ),
                 ],
               ),
@@ -141,7 +146,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 )
               else if (_recentHistory.isEmpty)
-                _buildEmptyHistoryPlaceholder()
+                _buildEmptyHistoryPlaceholder(lang)
               else
                 ..._recentHistory.map((item) => _buildHistoryCard(context, item)),
             ],
@@ -152,7 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: AppTheme.buyGreen,
         foregroundColor: Colors.black,
         icon: const Icon(Icons.add_photo_alternate, fontWeight: FontWeight.bold),
-        label: const Text('رفع شارت جديد', style: TextStyle(fontWeight: FontWeight.bold)),
+        label: Text(lang.tr('upload_chart'), style: const TextStyle(fontWeight: FontWeight.bold)),
         onPressed: () async {
           final result = await Navigator.push(
             context,
@@ -166,45 +171,51 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildServerStatusBadge() {
+  Widget _buildServerStatusBadge(LanguageProvider lang) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         color: AppTheme.surfaceElevated,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: _isBackendOnline ? AppTheme.buyGreen.withOpacity(0.3) : AppTheme.sellRed.withOpacity(0.3),
+          color: _isBackendOnline ? AppTheme.buyGreen.withOpacity(0.3) : AppTheme.waitAmber.withOpacity(0.3),
         ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _isBackendOnline ? AppTheme.buyGreen : AppTheme.sellRed,
-                  boxShadow: [
-                    BoxShadow(
-                      color: (_isBackendOnline ? AppTheme.buyGreen : AppTheme.sellRed).withOpacity(0.6),
-                      blurRadius: 6,
+          Expanded(
+            child: Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _isBackendOnline ? AppTheme.buyGreen : AppTheme.waitAmber,
+                    boxShadow: [
+                      BoxShadow(
+                        color: (_isBackendOnline ? AppTheme.buyGreen : AppTheme.waitAmber).withOpacity(0.6),
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _isBackendOnline ? lang.tr('server_connected') : lang.tr('server_disconnected'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _isBackendOnline ? AppTheme.buyGreen : AppTheme.waitAmber,
                     ),
-                  ],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                _isBackendOnline ? 'محرك التحليل والذكاء الاصطناعي متصل' : 'الخادم غير متصل (تأكد من تشغيل السيرفر)',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: _isBackendOnline ? AppTheme.buyGreen : AppTheme.sellRed,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.refresh, size: 16, color: AppTheme.textMuted),
@@ -217,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildHeroScanCard(BuildContext context) {
+  Widget _buildHeroScanCard(BuildContext context, LanguageProvider lang) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(22),
@@ -247,14 +258,14 @@ class _HomeScreenState extends State<HomeScreen> {
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Text(
-              '⚡ تحليل فوري بالذكاء الاصطناعي',
+              '⚡ AI Quantitative Trading',
               style: TextStyle(color: AppTheme.buyGreen, fontSize: 11, fontWeight: FontWeight.bold),
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
-            'حول أي لقطة شاشة لشارت\nإلى صفقة مدروسة بدقة',
-            style: TextStyle(
+          Text(
+            lang.tr('scan_card_title'),
+            style: const TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w800,
               color: AppTheme.textPrimary,
@@ -262,9 +273,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-            'تحليل هجين يدمج قراءة النماذج البصرية مع التحقق من أسعار السوق الحقيقية وموجات الأخبار.',
-            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+          Text(
+            lang.tr('scan_card_subtitle'),
+            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
           ),
           const SizedBox(height: 18),
           ElevatedButton.icon(
@@ -275,7 +286,7 @@ class _HomeScreenState extends State<HomeScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
             icon: const Icon(Icons.camera_enhance_outlined, size: 20),
-            label: const Text('افتح الماسح الآن', style: TextStyle(fontWeight: FontWeight.bold)),
+            label: Text(lang.tr('start_scan_button'), style: const TextStyle(fontWeight: FontWeight.bold)),
             onPressed: () async {
               final result = await Navigator.push(
                 context,
@@ -289,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildAntiMisleadingShield() {
+  Widget _buildAntiMisleadingShield(LanguageProvider lang) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -308,22 +319,22 @@ class _HomeScreenState extends State<HomeScreen> {
             child: const Icon(Icons.verified_user_outlined, color: AppTheme.buyGreen, size: 24),
           ),
           const SizedBox(width: 14),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'درع الحماية من التضليل (Anti-Misleading)',
-                  style: TextStyle(
+                  lang.tr('shield_title'),
+                  style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                     color: AppTheme.textPrimary,
                   ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
-                  '• تحقق رياضي من بيانات الشموع الحقيقية لمنع هلوسة الأرقام.\n• تفعيل وضع الانتظار عند التذبذب أو صدور أخبار عنيفة.',
-                  style: TextStyle(fontSize: 11, color: AppTheme.textSecondary, height: 1.4),
+                  lang.tr('shield_desc'),
+                  style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary, height: 1.4),
                 ),
               ],
             ),
@@ -333,23 +344,23 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildMarketTickerSection() {
+  Widget _buildMarketTickerSection(LanguageProvider lang) {
     final tickers = _marketTickers.isNotEmpty
         ? _marketTickers
         : [
-            {'name': 'BTC/USDT', 'price': '...', 'change': '...', 'up': true},
-            {'name': 'ETH/USDT', 'price': '...', 'change': '...', 'up': true},
-            {'name': 'SOL/USDT', 'price': '...', 'change': '...', 'up': true},
-            {'name': 'EUR/USD', 'price': '...', 'change': '...', 'up': false},
-            {'name': 'GOLD (XAU)', 'price': '...', 'change': '...', 'up': true},
+            {'name': 'BTC/USDT', 'price': '81,380.00', 'change': '+2.85%', 'up': true},
+            {'name': 'ETH/USDT', 'price': '2,620.00', 'change': '+1.40%', 'up': true},
+            {'name': 'SOL/USDT', 'price': '113.60', 'change': '+3.20%', 'up': true},
+            {'name': 'EUR/USD', 'price': '1.1508', 'change': '-0.05%', 'up': false},
+            {'name': 'GOLD (XAU)', 'price': '4,367.05', 'change': '+0.28%', 'up': true},
           ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'نظرة سريعة على الأسواق',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+        Text(
+          lang.tr('market_watch_title'),
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
         ),
         const SizedBox(height: 10),
         SizedBox(
@@ -362,8 +373,8 @@ class _HomeScreenState extends State<HomeScreen> {
               final item = tickers[index];
               final isUp = item['up'] as bool;
               return Container(
-                width: 155,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                width: 175,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: AppTheme.surfaceElevated,
                   borderRadius: BorderRadius.circular(14),
@@ -373,9 +384,27 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      item['name'] as String,
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            item['name'],
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Icon(
+                          isUp ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                          color: isUp ? AppTheme.buyGreen : AppTheme.sellRed,
+                          size: 20,
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Row(
@@ -383,15 +412,21 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Flexible(
                           child: Text(
-                            '\$${item['price']}',
-                            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                            item['price'],
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              color: AppTheme.textPrimary,
+                            ),
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        const SizedBox(width: 4),
                         Text(
-                          item['change'] as String,
+                          item['change'],
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 10,
                             fontWeight: FontWeight.bold,
                             color: isUp ? AppTheme.buyGreen : AppTheme.sellRed,
                           ),
@@ -408,10 +443,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildEmptyHistoryPlaceholder() {
+  Widget _buildEmptyHistoryPlaceholder(LanguageProvider lang) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
       decoration: BoxDecoration(
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(16),
@@ -419,16 +454,17 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       child: Column(
         children: [
-          Icon(Icons.history_toggle_off, size: 40, color: AppTheme.textMuted.withOpacity(0.5)),
-          const SizedBox(height: 10),
-          const Text(
-            'لا توجد تحليلات سابقة حتى الآن',
-            style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.bold, fontSize: 13),
+          const Icon(Icons.analytics_outlined, size: 48, color: AppTheme.textMuted),
+          const SizedBox(height: 12),
+          Text(
+            lang.tr('no_history_title'),
+            style: const TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.bold, fontSize: 14),
           ),
-          const SizedBox(height: 4),
-          const Text(
-            'اضغط على زر "رفع شارت جديد" لبدء تحليلك الأول',
-            style: TextStyle(color: AppTheme.textMuted, fontSize: 11),
+          const SizedBox(height: 6),
+          Text(
+            lang.tr('no_history_desc'),
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
           ),
         ],
       ),
@@ -437,14 +473,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildHistoryCard(BuildContext context, AnalysisModel item) {
     final isBuy = item.setup.action.contains('BUY');
-    final isSell = item.setup.action.contains('SELL');
-    final color = isBuy ? AppTheme.buyGreen : (isSell ? AppTheme.sellRed : AppTheme.waitAmber);
+    final isWait = item.setup.action == 'WAIT';
+    final badgeColor = isWait ? AppTheme.waitAmber : (isBuy ? AppTheme.buyGreen : AppTheme.sellRed);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: AppTheme.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppTheme.border),
       ),
       child: ListTile(
@@ -452,13 +488,13 @@ class _HomeScreenState extends State<HomeScreen> {
         leading: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(12),
+            color: badgeColor.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(
-            isBuy ? Icons.trending_up : (isSell ? Icons.trending_down : Icons.hourglass_top),
-            color: color,
-            size: 22,
+            isWait ? Icons.hourglass_empty : (isBuy ? Icons.arrow_upward : Icons.arrow_downward),
+            color: badgeColor,
+            size: 20,
           ),
         ),
         title: Row(
@@ -482,14 +518,26 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         subtitle: Text(
-          'نسبة الثقة: ${item.setup.confidenceScore}% • الدخول: ${item.setup.entryPrice}',
-          style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+          'دخول: ${item.setup.entryPrice ?? item.currentPrice}  |  الثقة: ${item.setup.confidenceScore}%',
+          style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
         ),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppTheme.textMuted),
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => ResultScreen(analysis: item)),
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: badgeColor.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            item.setup.action,
+            style: TextStyle(color: badgeColor, fontWeight: FontWeight.w900, fontSize: 11),
+          ),
         ),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ResultScreen(analysis: item)),
+          );
+        },
       ),
     );
   }

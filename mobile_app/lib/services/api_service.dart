@@ -1,11 +1,11 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/analysis_model.dart';
 
 class ApiService {
-  static const String _defaultBaseUrl = 'https://shart-ai.onrender.com'; // Live Cloud URL on Render
+  static const String _defaultBaseUrl = 'https://shart-ai.onrender.com';
 
   static Future<String> getBaseUrl() async {
     final prefs = await SharedPreferences.getInstance();
@@ -22,7 +22,7 @@ class ApiService {
       final baseUrl = await getBaseUrl();
       final response = await http
           .get(Uri.parse('$baseUrl/api/health'))
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 15));
       return response.statusCode == 200;
     } catch (_) {
       return false;
@@ -64,23 +64,23 @@ class ApiService {
   }
 
   static Future<List<Map<String, dynamic>>> getMarketSummary() async {
-    // 1. Try fetching from Backend
+    // 1. Try fetching directly from backend
     try {
       final baseUrl = await getBaseUrl();
       final response = await http
           .get(Uri.parse('$baseUrl/api/market-summary'))
-          .timeout(const Duration(seconds: 4));
+          .timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
         final List list = json.decode(utf8.decode(response.bodyBytes));
         return list.map((e) => Map<String, dynamic>.from(e)).toList();
       }
     } catch (_) {}
 
-    // 2. Fallback: Fetch directly from Binance live public ticker API
+    // 2. Fallback: Fetch real-time live data from Binance filtered API
     try {
       final response = await http
-          .get(Uri.parse('https://api.binance.com/api/v3/ticker/24hr'))
-          .timeout(const Duration(seconds: 5));
+          .get(Uri.parse('https://api.binance.com/api/v3/ticker/24hr?symbols=%5B%22BTCUSDT%22,%22ETHUSDT%22,%22SOLUSDT%22,%22EURUSDT%22,%22PAXGUSDT%22%5D'))
+          .timeout(const Duration(seconds: 6));
       if (response.statusCode == 200) {
         final List list = json.decode(response.body);
         final Map<String, dynamic> dataMap = {
@@ -114,13 +114,13 @@ class ApiService {
       }
     } catch (_) {}
 
-    // 3. Static fallback if device is completely offline
+    // 3. Fallback realistic numbers if completely disconnected
     return [
-      {'name': 'BTC/USDT', 'price': '68,450.00', 'change': '+2.40%', 'up': true},
-      {'name': 'ETH/USDT', 'price': '3,520.00', 'change': '+1.80%', 'up': true},
-      {'name': 'SOL/USDT', 'price': '152.40', 'change': '+3.10%', 'up': true},
-      {'name': 'EUR/USD', 'price': '1.0855', 'change': '-0.15%', 'up': false},
-      {'name': 'GOLD (XAU)', 'price': '2,364.50', 'change': '+0.65%', 'up': true},
+      {'name': 'BTC/USDT', 'price': '81,380.00', 'change': '+2.85%', 'up': true},
+      {'name': 'ETH/USDT', 'price': '2,620.00', 'change': '+1.40%', 'up': true},
+      {'name': 'SOL/USDT', 'price': '113.60', 'change': '+3.20%', 'up': true},
+      {'name': 'EUR/USD', 'price': '1.1508', 'change': '-0.05%', 'up': false},
+      {'name': 'GOLD (XAU)', 'price': '4,367.05', 'change': '+0.28%', 'up': true},
     ];
   }
 }
