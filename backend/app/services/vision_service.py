@@ -90,14 +90,22 @@ CRITICAL INSTRUCTIONS:
                 temperature=0.1,
                 max_output_tokens=600
             )
-            return self.client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=[
-                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                    prompt
-                ],
-                config=config
-            )
+            candidate_models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash']
+            last_err = None
+            for m in candidate_models:
+                try:
+                    return self.client.models.generate_content(
+                        model=m,
+                        contents=[
+                            types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                            prompt
+                        ],
+                        config=config
+                    )
+                except Exception as ex:
+                    last_err = ex
+                    print(f"Vision model {m} failed: {ex}, attempting next model...")
+            raise last_err or Exception("All Gemini Vision models failed.")
 
         response = await asyncio.to_thread(_generate)
         

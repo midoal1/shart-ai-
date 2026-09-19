@@ -69,6 +69,7 @@ async def analyze_chart(
             manual_symbol=symbol,
             manual_timeframe=timeframe
         )
+        print(f"[ANALYZE] Extracted: sym={extraction.symbol}, tf={extraction.timeframe}, price={extraction.current_price}, bias={extraction.signal_bias}")
 
         # Step 2: Live Market Data & Deterministic Math Validation
         indicators, s_levels, r_levels = await market_service.get_live_market_data(
