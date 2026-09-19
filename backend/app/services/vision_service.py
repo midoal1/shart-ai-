@@ -1,10 +1,8 @@
-import os
+﻿import os
 import json
-import base64
 import re
 from typing import Optional
-from PIL import Image
-import io
+import asyncio
 
 from app.models import ChartExtraction, MarketType
 
@@ -19,15 +17,24 @@ class VisionService:
             except Exception as e:
                 print(f"Failed to initialize google-genai client: {e}")
 
+    def _detect_mime_type(self, image_bytes: bytes) -> str:
+        header = image_bytes[:12]
+        if header.startswith(b'\x89PNG\r\n\x1a\n'):
+            return 'image/png'
+        elif header[:2] == b'\xff\xd8':
+            return 'image/jpeg'
+        elif header[:6] in (b'GIF87a', b'GIF89a'):
+            return 'image/gif'
+        elif header[:4] == b'RIFF' and len(header) >= 12 and header[8:12] == b'WEBP':
+            return 'image/webp'
+        return 'image/jpeg'
+
     async def analyze_chart_image(
         self, 
         image_bytes: bytes, 
         manual_symbol: Optional[str] = None, 
         manual_timeframe: Optional[str] = None
     ) -> ChartExtraction:
-        """
-        Extract chart details from image using Gemini Vision, or fallback to smart pattern recognition.
-        """
         if self.client and self.api_key:
             try:
                 return await self._call_gemini_vision(image_bytes, manual_symbol, manual_timeframe)
@@ -43,6 +50,8 @@ class VisionService:
         manual_timeframe: Optional[str] = None
     ) -> ChartExtraction:
         from google.genai import types
+
+        mime_type = self._detect_mime_type(image_bytes)
 
         prompt = f"""
 You are a professional Senior Quantitative Financial Analyst and Expert Chart Reader.
@@ -66,13 +75,16 @@ Extract the following in strict JSON format:
 
 Return ONLY valid JSON without markdown wrapping or code fences.
 """
-        response = self.client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=[
-                types.Part.from_bytes(data=image_bytes, mime_type='image/png'),
-                prompt
-            ]
-        )
+        def _generate():
+            return self.client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=[
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                    prompt
+                ]
+            )
+
+        response = await asyncio.to_thread(_generate)
         
         raw_text = response.text.strip()
         # Clean JSON fences if present
@@ -82,7 +94,6 @@ Return ONLY valid JSON without markdown wrapping or code fences.
 
         data = json.loads(raw_text)
 
-        # Map market type
         market_type_str = data.get("market_type", "CRYPTO").upper()
         if "FOREX" in market_type_str:
             m_type = MarketType.FOREX
@@ -110,9 +121,6 @@ Return ONLY valid JSON without markdown wrapping or code fences.
         manual_symbol: Optional[str], 
         manual_timeframe: Optional[str]
     ) -> ChartExtraction:
-        """
-        Deterministic smart parser when API key is not supplied or during offline simulation.
-        """
         symbol = (manual_symbol or "BTCUSDT").upper().replace("/", "").replace("-", "")
         timeframe = manual_timeframe or "1h"
 
