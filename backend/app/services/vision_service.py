@@ -10,12 +10,20 @@ class VisionService:
     def __init__(self):
         self.api_key = os.environ.get("GEMINI_API_KEY", "")
         self.client = None
+        self.last_error = None
+        self._init_client()
+
+    def _init_client(self):
+        self.api_key = os.environ.get("GEMINI_API_KEY", "")
         if self.api_key:
             try:
                 from google import genai
                 self.client = genai.Client(api_key=self.api_key)
             except Exception as e:
-                print(f"Failed to initialize google-genai client: {e}")
+                self.last_error = f"Failed to init genai client: {e}"
+                print(self.last_error)
+        else:
+            self.last_error = "GEMINI_API_KEY environment variable is missing on server"
 
     def _detect_mime_type(self, image_bytes: bytes) -> str:
         header = image_bytes[:12]
@@ -35,11 +43,16 @@ class VisionService:
         manual_symbol: Optional[str] = None, 
         manual_timeframe: Optional[str] = None
     ) -> ChartExtraction:
+        if not self.client:
+            self._init_client()
+
         if self.client and self.api_key:
             try:
                 return await self._call_gemini_vision(image_bytes, manual_symbol, manual_timeframe)
             except Exception as e:
-                print(f"Error calling Gemini Vision API: {e}. Falling back to smart default parser.")
+                import traceback
+                self.last_error = f"Gemini Vision call failed: {e}\n{traceback.format_exc()}"
+                print(self.last_error)
 
         return self._smart_fallback(image_bytes, manual_symbol, manual_timeframe)
 

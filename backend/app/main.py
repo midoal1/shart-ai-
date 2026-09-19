@@ -46,6 +46,16 @@ async def health_check():
         "version": "1.5.0"
     }
 
+@app.get("/api/debug-vision")
+async def debug_vision():
+    return {
+        "has_key": bool(vision_service.api_key),
+        "key_length": len(vision_service.api_key),
+        "key_prefix": vision_service.api_key[:6] if vision_service.api_key else "NONE",
+        "has_client": bool(vision_service.client),
+        "last_error": vision_service.last_error
+    }
+
 @app.get("/api/market-summary")
 async def get_market_summary():
     """Fetch live real-time tickers for Home screen"""
