@@ -37,6 +37,56 @@ class VisionService:
             return 'image/webp'
         return 'image/jpeg'
 
+    def _parse_json_safely(self, raw_text: str) -> dict:
+        import ast
+        text = raw_text.strip()
+        # Strip markdown fences
+        text = re.sub(r"^```json\s*", "", text)
+        text = re.sub(r"^```\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+        text = text.strip()
+
+        # Find outer braces if wrapped by text
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if match:
+            text = match.group(0)
+
+        # Remove JS/C-style comments
+        text = re.sub(r"//.*", "", text)
+        text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+
+        # Remove trailing commas
+        text = re.sub(r",\s*([\]}])", r"\1", text)
+
+        # 1. Try standard JSON parse
+        try:
+            return json.loads(text)
+        except Exception:
+            pass
+
+        # 2. Quote unquoted keys: e.g. { symbol: "BTC" }
+        fixed_keys = re.sub(r"([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:", r'\1"\2":', text)
+        try:
+            return json.loads(fixed_keys)
+        except Exception:
+            pass
+
+        # 3. Try ast literal eval
+        try:
+            val = ast.literal_eval(text)
+            if isinstance(val, dict):
+                return val
+        except Exception:
+            pass
+
+        # 4. Try replacing single quotes with double quotes
+        try:
+            quoted = re.sub(r"'([^'\\]*(?:\\.[^'\\]*)*)'", r'"\1"', text)
+            return json.loads(quoted)
+        except Exception as e:
+            print(f"Error parsing Gemini output: {e}. Raw was: {raw_text[:300]}")
+            raise Exception(f"Failed to parse model JSON: {e}")
+
     async def analyze_chart_image(
         self, 
         image_bytes: bytes, 
@@ -99,6 +149,7 @@ CRITICAL INSTRUCTIONS:
 """
         def _generate():
             config = types.GenerateContentConfig(
+                system_instruction="You are a specialized trading chart OCR engine. Output strictly valid JSON without any markdown formatting or comments.",
                 response_mime_type="application/json",
                 temperature=0.1,
                 max_output_tokens=600
@@ -121,14 +172,8 @@ CRITICAL INSTRUCTIONS:
             raise last_err or Exception("All Gemini Vision models failed.")
 
         response = await asyncio.to_thread(_generate)
-        
         raw_text = response.text.strip()
-        # Clean JSON fences if present
-        raw_text = re.sub(r"^```json\s*", "", raw_text)
-        raw_text = re.sub(r"^```\s*", "", raw_text)
-        raw_text = re.sub(r"\s*```$", "", raw_text)
-
-        data = json.loads(raw_text)
+        data = self._parse_json_safely(raw_text)
 
         # Normalize symbol
         raw_sym = (manual_symbol if has_manual_sym else data.get("symbol", "BTCUSDT")) or "BTCUSDT"
