@@ -1,27 +1,20 @@
 ﻿import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/analysis_model.dart';
 
 class ApiService {
-  static const String _defaultBaseUrl = 'https://shart-ai.onrender.com';
+  // Always use the live Cloud URL directly - no configuration needed for users!
+  static const String liveCloudUrl = 'https://shart-ai.onrender.com';
 
   static Future<String> getBaseUrl() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('backend_base_url') ?? _defaultBaseUrl;
-  }
-
-  static Future<void> setBaseUrl(String url) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('backend_base_url', url);
+    return liveCloudUrl;
   }
 
   static Future<bool> checkHealth() async {
     try {
-      final baseUrl = await getBaseUrl();
       final response = await http
-          .get(Uri.parse('$baseUrl/api/health'))
+          .get(Uri.parse('$liveCloudUrl/api/health'))
           .timeout(const Duration(seconds: 15));
       return response.statusCode == 200;
     } catch (_) {
@@ -34,8 +27,7 @@ class ApiService {
     String? symbol,
     String? timeframe,
   }) async {
-    final baseUrl = await getBaseUrl();
-    final uri = Uri.parse('$baseUrl/api/analyze-chart');
+    final uri = Uri.parse('$liveCloudUrl/api/analyze-chart');
 
     final request = http.MultipartRequest('POST', uri);
     request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
@@ -64,11 +56,10 @@ class ApiService {
   }
 
   static Future<List<Map<String, dynamic>>> getMarketSummary() async {
-    // 1. Try fetching directly from backend
+    // 1. Try fetching directly from cloud backend
     try {
-      final baseUrl = await getBaseUrl();
       final response = await http
-          .get(Uri.parse('$baseUrl/api/market-summary'))
+          .get(Uri.parse('$liveCloudUrl/api/market-summary'))
           .timeout(const Duration(seconds: 8));
       if (response.statusCode == 200) {
         final List list = json.decode(utf8.decode(response.bodyBytes));
@@ -114,7 +105,7 @@ class ApiService {
       }
     } catch (_) {}
 
-    // 3. Fallback realistic numbers if completely disconnected
+    // 3. Fallback realistic numbers if device is completely offline
     return [
       {'name': 'BTC/USDT', 'price': '81,380.00', 'change': '+2.85%', 'up': true},
       {'name': 'ETH/USDT', 'price': '2,620.00', 'change': '+1.40%', 'up': true},

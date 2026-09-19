@@ -12,7 +12,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _urlController = TextEditingController();
   bool _testingConnection = false;
   String? _testResult;
   bool _isSuccess = false;
@@ -20,24 +19,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadUrl();
+    _checkServerStatus();
   }
 
-  Future<void> _loadUrl() async {
-    final url = await ApiService.getBaseUrl();
-    _urlController.text = url;
+  Future<void> _checkServerStatus() async {
+    final ok = await ApiService.checkHealth();
+    if (mounted) {
+      setState(() {
+        _isSuccess = ok;
+      });
+    }
   }
 
-  @override
-  void dispose() {
-    _urlController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _saveAndTest() async {
-    final url = _urlController.text.trim();
-    if (url.isEmpty) return;
-
+  Future<void> _testConnection() async {
     final lang = Provider.of<LanguageProvider>(context, listen: false);
 
     setState(() {
@@ -45,14 +39,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _testResult = null;
     });
 
-    await ApiService.setBaseUrl(url);
     final ok = await ApiService.checkHealth();
 
-    setState(() {
-      _testingConnection = false;
-      _isSuccess = ok;
-      _testResult = ok ? lang.tr('connected_success') : lang.tr('connection_failed');
-    });
+    if (mounted) {
+      setState(() {
+        _testingConnection = false;
+        _isSuccess = ok;
+        _testResult = ok ? lang.tr('connected_success') : lang.tr('connection_failed');
+      });
+    }
   }
 
   @override
@@ -154,7 +149,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Server Config Card
+            // Cloud Server Status Card (Clean & User-friendly)
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -167,34 +162,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.cloud_done_outlined, color: AppTheme.buyGreen, size: 20),
+                      const Icon(Icons.cloud_done, color: AppTheme.buyGreen, size: 20),
                       const SizedBox(width: 8),
                       Text(
-                        lang.tr('server_url'),
+                        lang.isArabic ? 'حالة السيرفر السحابي والذكاء الاصطناعي' : 'Cloud Server & AI Status',
                         style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.textPrimary),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _urlController,
-                    style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: 'https://shart-ai.onrender.com',
-                      filled: true,
-                      fillColor: AppTheme.surfaceElevated,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: const BorderSide(color: AppTheme.border),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.surfaceElevated,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _isSuccess ? AppTheme.buyGreen.withOpacity(0.3) : AppTheme.waitAmber.withOpacity(0.3),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    lang.isArabic
-                        ? '• تم ضبط السيرفر السحابي أونلاين تلقائياً (https://shart-ai.onrender.com).\n• يمكنك تغيير الرابط في أي وقت إذا قمت بنقل السيرفر.'
-                        : '• Cloud Backend URL is configured automatically (https://shart-ai.onrender.com).\n• You can edit this anytime if you migrate your server.',
-                    style: const TextStyle(fontSize: 11, color: AppTheme.textMuted, height: 1.5),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _isSuccess ? AppTheme.buyGreen : AppTheme.waitAmber,
+                            boxShadow: [
+                              BoxShadow(
+                                color: (_isSuccess ? AppTheme.buyGreen : AppTheme.waitAmber).withOpacity(0.5),
+                                blurRadius: 6,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _isSuccess 
+                                ? (lang.isArabic ? 'متصل وجاهز لتحليل الشارتات في أي وقت' : 'Online & ready to analyze charts')
+                                : (lang.isArabic ? 'جاري التحقق من الاتصال بالسحابة...' : 'Checking cloud connection...'),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _isSuccess ? AppTheme.buyGreen : AppTheme.waitAmber,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
                   SizedBox(
@@ -212,9 +228,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               height: 16,
                               child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                             )
-                          : const Icon(Icons.wifi_tethering, size: 18),
-                      label: Text(lang.tr('save_and_test')),
-                      onPressed: _testingConnection ? null : _saveAndTest,
+                          : const Icon(Icons.refresh, size: 18),
+                      label: Text(lang.isArabic ? 'فحص الاتصال الآن' : 'Check Connection Now'),
+                      onPressed: _testingConnection ? null : _testConnection,
                     ),
                   ),
                   if (_testResult != null) ...[
