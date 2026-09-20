@@ -5,6 +5,20 @@ from typing import Optional
 import asyncio
 
 from app.models import ChartExtraction, MarketType
+from pydantic import BaseModel, Field
+from typing import List, Optional
+
+class VisionExtractionSchema(BaseModel):
+    symbol: str = Field(description="Detected asset symbol e.g., EURUSD, BTCUSDT, XAUUSD, TSLA")
+    market_type: str = Field(description="FOREX, CRYPTO, COMMODITY, or STOCK")
+    timeframe: str = Field(description="Chart timeframe e.g. 1m, 5m, 15m, 1h, 4h, 1D")
+    current_price: Optional[float] = Field(default=None, description="Exact current market price read from chart vertical axis")
+    visual_trend: str = Field(description="Uptrend, Downtrend, or Sideways")
+    patterns: List[str] = Field(default_factory=list, description="Visual patterns observed like Bull Flag, Double Top, Support Breakdown")
+    support_levels: List[float] = Field(default_factory=list, description="Visible horizontal support levels on price axis")
+    resistance_levels: List[float] = Field(default_factory=list, description="Visible horizontal resistance levels on price axis")
+    signal_bias: Optional[str] = Field(default=None, description="Immediate visual signal bias: BUY, SELL, or WAIT")
+    confidence: float = Field(default=0.88, description="Model confidence 0.0 to 1.0")
 
 class VisionService:
     def __init__(self):
@@ -101,7 +115,7 @@ class VisionService:
                 return await self._call_gemini_vision(image_bytes, manual_symbol, manual_timeframe)
             except Exception as e:
                 import traceback
-                self.last_error = f"Gemini Vision call failed: {e}\n{traceback.format_exc()}"
+                self.last_error = f"Gemini Vision call failed: {e}\nRaw output was: {getattr(self, 'raw_output', 'None')}\n{traceback.format_exc()}"
                 print(self.last_error)
 
         return self._smart_fallback(image_bytes, manual_symbol, manual_timeframe)
@@ -149,12 +163,12 @@ CRITICAL INSTRUCTIONS:
 """
         def _generate():
             config = types.GenerateContentConfig(
-                system_instruction="You are a specialized trading chart OCR engine. Output strictly valid JSON without any markdown formatting or comments.",
+                system_instruction="You are an expert OCR financial chart reading system. Extract the symbol, timeframe, price, support/resistance, trend, and signal bias strictly conforming to the schema.",
                 response_mime_type="application/json",
+                response_schema=VisionExtractionSchema,
                 temperature=0.1,
-                max_output_tokens=600
             )
-            candidate_models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash']
+            candidate_models = ['gemini-2.0-flash', 'gemini-1.5-flash']
             last_err = None
             for m in candidate_models:
                 try:
@@ -172,8 +186,13 @@ CRITICAL INSTRUCTIONS:
             raise last_err or Exception("All Gemini Vision models failed.")
 
         response = await asyncio.to_thread(_generate)
-        raw_text = response.text.strip()
-        data = self._parse_json_safely(raw_text)
+        raw_text = getattr(response, 'text', '') or ''
+        self.raw_output = raw_text
+
+        if hasattr(response, 'parsed') and response.parsed:
+            data = response.parsed.model_dump() if hasattr(response.parsed, 'model_dump') else dict(response.parsed)
+        else:
+            data = self._parse_json_safely(raw_text)
 
         # Normalize symbol
         raw_sym = (manual_symbol if has_manual_sym else data.get("symbol", "BTCUSDT")) or "BTCUSDT"
