@@ -48,11 +48,19 @@ async def health_check():
 
 @app.get("/api/debug-vision")
 async def debug_vision():
+    available_models = []
+    if vision_service.client:
+        try:
+            for m in vision_service.client.models.list():
+                available_models.append(getattr(m, "name", str(m)))
+        except Exception as e:
+            available_models = [f"Error listing: {e}"]
     return {
         "has_key": bool(vision_service.api_key),
         "key_length": len(vision_service.api_key),
         "key_prefix": vision_service.api_key[:6] if vision_service.api_key else "NONE",
         "has_client": bool(vision_service.client),
+        "available_models": available_models[:20],
         "last_error": vision_service.last_error
     }
 
